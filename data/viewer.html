@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF8">
+<script src="mjs_plot_0_4_n.js"></script>
+<script src="renderjson.js"></script>
+<style>
+
+#container {
+    background: white;
+    display: block;
+}
+#left, #right {
+    display: inline-block;
+	/*border: 1px solid black;*/
+	vertical-align: top;
+	padding:0;
+	margin:0;
+	overflow:auto;
+	height:80vh;
+}
+#left {
+    width: 49.5%;
+    background: white;
+    overflow:hidden;
+}
+#right {
+    background: white;
+	width: 49.5%;
+	border-bottom:1px solid black;
+	border-top:1px solid black;
+}
+
+#toppart {
+background: #lightgrey;
+margin:0.5em;
+padding:0;
+width:100%
+}
+
+span button {
+	
+	background: lightgrey;
+	border: 1px solid white;
+	margin-left: 0.1em;
+	margin-top:-0.1em;
+	padding-bottom:-0.1em;
+	padding-top:-0.1em;
+	margin-bottom:-0.1em;
+}
+
+span button:hover {
+	color:white;
+	background: grey;
+}
+
+.removeButton{
+	background: lightgrey;
+	border: none;
+	margin-left: 0.1em;
+}
+.removeButton:hover {
+	color:white;
+	background: grey;
+}
+
+</style>
+</head>
+<body>
+
+
+
+
+<div id="toppart">
+Data viewer. X:<span id='newxdata'></span>, Y:<span id='newydata'></span>
+<button onclick='plotdata()'> Plot </button>
+<button onclick='timeseriesdata()'> Timeseries </button>
+<button onclick='clearplot()'> Clear All </button>
+
+<select id="jsonSelecter" style='margin-left:6em'>
+</select> 
+<button onclick='loadDropdownMenu()'> Load </button>
+</div>
+
+<div id="container">
+    <div id="left">
+		<canvas id="c" width="300" height="600"></canvas>
+	</div>
+    <div id="right">
+		<div id='jsonview'></div>
+	</div>
+</div>
+
+<script>
+var g = mjs_plot.new_graph("c");
+g.matchParentSize();
+//load the json
+
+renderjson.set_show_to_level(1);
+
+newxdata = [];
+newydata = [];
+newxdatapath = [];
+newydatapath = [];
+newcaption = '';
+
+savedPlotPaths = [];
+
+function savePlotItemsKeypaths(pathX,pathY,type){
+	savedPlotPaths.push({'pathX':pathX,'pathY':pathY,type:type});
+}
+function redrawFromSavedKeypaths(){
+	g.clear();
+	savedPlotPathsCopy = savedPlotPaths;
+	savedPlotPaths = [];
+	for (var i=0;i<savedPlotPathsCopy.length;i++){
+		p = savedPlotPathsCopy[i];
+		loadX(loadObjectFromPath(p['pathX']),p['pathX'])
+		loadY(loadObjectFromPath(p['pathY']),p['pathY'])
+		if (p['type'] === 'timeseries'){
+			timeseriesdata();
+		} else {
+			plotdata();
+		}
+	}
+	
+}
+
+function loadX(obj,keypath){
+	newxdata = obj;
+	newxdatapath = keypath;
+	document.getElementById("newxdata").textContent = keypath.join('/');
+}
+
+function loadY(obj,keypath){
+	newydata = obj;
+	newydatapath = keypath;
+	newcaption = keypath[keypath.length-1];
+	document.getElementById("newydata").textContent = keypath.join('/');
+}
+function basicDataChecks(){
+	return newxdata.length == newydata.length
+}
+function plotdata(){
+	if (basicDataChecks()){
+		g.plot(newxdata,newydata,newcaption);
+		savePlotItemsKeypaths(newxdatapath,newydatapath,'plot');
+		g.draw();
+		loadX([],[]);
+		loadY([],[]);
+	}
+}
+
+function timeseriesdata(){
+	if (basicDataChecks()){
+		g.timeseries(newxdata,newydata,newcaption);
+		savePlotItemsKeypaths(newxdatapath,newydatapath,'timeseries');
+		g.draw();
+		loadX([],[]);
+		loadY([],[]);
+	}
+}
+function clearplot(){
+	g.clear();g.draw();
+	savedPlotPaths = []; 
+}
+
+
+
+
+function readTextFile(file,callback){
+    var rawFile = new XMLHttpRequest();
+    rawFile.open("GET", file, true);
+	rawFile.overrideMimeType("application/json");
+    rawFile.onreadystatechange = function ()
+    {
+        if(rawFile.readyState === 4)
+        {
+            if(rawFile.status === 200 || rawFile.status == 0)
+            {
+				var v = rawFile.responseText;
+				//console.log(v);
+                callback(  JSON.parse( rawFile.responseText ), file );
+            }
+        }
+    }
+    rawFile.send(null);
+}
+
+function loadDropdownMenu(){
+	s = document.getElementById('jsonSelecter').value;
+	readTextFile(  s , function (obj,name){  setLoadedJson(obj,name,true);   } )     
+}
+
+LoadedJson = {};
+
+function reloadFile(name){
+	//this must already exist in LoadedJson and JsonFilesForReload
+	//removeJson(name);
+	readTextFile( name, function (obj,name){  setLoadedJson(obj,name,true); redrawFromSavedKeypaths();   } )
+
+	
+}
+
+function removeJson(name){
+	delete LoadedJson[name];
+}
+
+function loadObjectFromPath(parts){
+	obj = LoadedJson
+	for (var i=0;i<parts.length;i++){
+		obj = obj[parts[i]];
+	}
+	return obj
+}
+
+// load json by ajax from the search string part of the url
+function loadAjaxFiles(){
+	
+	var s = window.location.search.substring(1);
+	var f = s.split(',');
+	for (var i=0;i<f.length;i++){
+		if (f[i].toLowerCase().endsWith('json')  ){
+			readTextFile( f[i] , function (obj,name){  setLoadedJson(obj,name,true);   } )
+		}
+	}
+	
+	
+	if (s.length == 0){
+		//if there is a manifest file, load it in.
+		readTextFile( 'data_manifest.json', function(obj,name){ 
+		
+			//load in the first option
+			readTextFile(  obj[obj.length-1]['filename']  , function (obj,name){  setLoadedJson(obj,name,true);   } )     
+			
+			var select = document.getElementById("jsonSelecter"); 
+			
+
+			for (var i = 0; i < obj.length; i++) {
+				var el = document.createElement("option");
+				el.textContent = obj[i]['filename'];
+				el.value = obj[i]['filename'];
+				select.appendChild(el);
+			}
+			
+		} );
+
+		
+		
+		
+	}
+}
+
+
+
+
+function setLoadedJson(obj,name,reloadable){
+	LoadedJson[name] = obj;
+	document.getElementById("jsonview").appendChild(renderjson(obj,name,reloadable));
+}
+
+// http://html5-demos.appspot.com/static/filesystem/filer.js/demos/js/dnd.js
+function DnDFileController(selector, onDropCallback) {
+  var el_ = document.querySelector(selector);
+
+  this.dragenter = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    el_.classList.add('dropping');
+  };
+
+  this.dragover = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
+  this.dragleave = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    //el_.classList.remove('dropping');
+  };
+
+  this.drop = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    el_.classList.remove('dropping');
+
+    onDropCallback(e.dataTransfer.files, e);
+  };
+
+  el_.addEventListener('dragenter', this.dragenter, false);
+  el_.addEventListener('dragover', this.dragover, false);
+  el_.addEventListener('dragleave', this.dragleave, false);
+  el_.addEventListener('drop', this.drop, false);
+};
+
+
+
+
+
+var dnd = new DnDFileController('body', function(files) {  
+ 
+  
+  for (var i=0;i<files.length;i++){
+	   var f = files[i];
+	  if (!f.type.match('application/json')) {
+		console.log('Not a JSON file!');
+	  }
+
+	  var reader = new FileReader();
+	  reader.name = f.name
+		reader.onloadend = function(e) {
+		var result = JSON.parse(this.result);
+		setLoadedJson(result,this.name,false);
+		
+	  };
+	  
+	  reader.readAsText(f);
+	  //JsonFilesForReload[f.name] = f;
+	}
+	
+});
+
+
+loadAjaxFiles();
+
+</script>
+</body>
+</html>
