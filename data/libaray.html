@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF8">
+<script src="mjs_plot_0_4_n.js"></script>
+<script src="renderjson.js"></script>
+<style>
+
+#divTable {
+    font-size:small;
+    
+}
+
+tr:nth-child(even) {
+    background-color: #eee;
+}
+
+td {
+  padding:0.2em;
+  margin:0;
+}
+
+thead {
+  text-align: center;
+  font-weight: bold;
+  font-family:sans;
+}
+
+</style>
+</head>
+<body>
+    
+<div>
+<input id='filterstring' placeholder="Filter string" type='text' onkeydown="if (event.keyCode == 13) { runfilter(); return false; }"> </input>
+<button onclick='runfilter()'> Filter </button>
+<button onclick='showAllTable()'> Reset Filter </button>
+
+
+</div>
+    
+<div id="divTable" >
+
+</div>
+<script>
+
+
+
+function readTextFile(file,callback){
+    var rawFile = new XMLHttpRequest();
+    rawFile.open("GET", file, true);
+	rawFile.overrideMimeType("application/json");
+    rawFile.onreadystatechange = function ()
+    {
+        if(rawFile.readyState === 4)
+        {
+            if(rawFile.status === 200 || rawFile.status == 0)
+            {
+				var v = rawFile.responseText;
+				//console.log(v);
+                callback(  JSON.parse( rawFile.responseText ), file );
+            }
+        }
+    }
+    rawFile.send(null);
+}
+
+manifest = [];
+manifest_read_index = 0;
+datafiles = [];
+table = [];
+
+function removeJson(name){
+	delete LoadedJson[name];
+}
+
+
+
+// load json by ajax from the search string part of the url
+function loadAjaxFiles(){
+	readTextFile( 'data_manifest.json', function(obj,name){ 
+        manifest = obj;
+        manifest_read_index = 0;
+        setTimeout(readNextdatafile,10);
+        }
+    );
+}
+
+function readNextdatafile(){
+    if (manifest_read_index < manifest.length){
+        console.log('will read file ' + manifest[manifest_read_index]['filename']);
+        readTextFile( manifest[manifest_read_index]['filename'], function(obj,name){ 
+            datafiles.push(obj);
+            console.log('read file ' + manifest[manifest_read_index]['filename']);
+        });
+        manifest_read_index +=1;
+        setTimeout(readNextdatafile,10);
+        
+    } else {
+        makeTable()
+    }
+}
+
+
+function loadObjectFromPath(parts){
+	obj = LoadedJson
+	for (var i=0;i<parts.length;i++){
+		obj = obj[parts[i]];
+	}
+	return obj
+}
+
+function fromPath(obj,parts){
+	for (var i=0;i<parts.length;i++){
+		obj = obj[parts[i]];
+	}
+	return obj
+}
+
+function containsString(el,s){
+    
+    if (el.textContent.indexOf(s)>-1){
+        return true;
+    } else {
+        var b = false;
+        for (var i=0;i<el.childNodes.length;i++){
+            b = b | containsString(el.childNodes[i],s)
+        }
+        return b;
+    }
+    
+}
+
+function runfilter(){
+    var s = document.getElementById("filterstring").value;
+    filterTable(s);
+}
+
+function showAllTable(){
+    var table = document.getElementById("datatable");
+    for (var i = 0, row; row = table.rows[i]; i++) {
+            row.style.display = '';
+    }
+}
+
+function filterTable(s){
+    
+    var table = document.getElementById("datatable");
+    
+    if (s.length>0){
+        for (var i = 1, row; row = table.rows[i]; i++) {
+            var hasS = false;
+            for (var j = 0, col; col = row.cells[j]; j++) {
+                if (containsString(col,s)){
+                    hasS = true;
+                    break;
+                }
+            }  
+            if (! hasS){
+               row.style.display = 'none';
+            } 
+            /*
+            else {
+                row.style.display = '';
+            }
+            */
+        }
+    } else {
+        showAllTable();
+    }
+}
+
+
+function clearTable(){
+    var div = document.getElementById("divTable");
+    while (div.firstChild) {
+        div.removeChild(myNode.firstChild);
+    }
+}
+
+function isNumeric(num){
+    return !isNaN(num)
+}
+
+function sortTable(colnumber,invert) {
+  var table, rows, switching, i, x, y, shouldSwitch;
+  table = document.getElementById("datatable");
+  switching = true;
+  /*Make a loop that will continue until
+  no switching has been done:*/
+  while (switching) {
+    //start by saying: no switching is done:
+    switching = false;
+    rows = table.getElementsByTagName("TR");
+    /*Loop through all table rows (except the
+    first, which contains table headers):*/
+    for (i = 1; i < (rows.length - 1); i++) {
+      //start by saying there should be no switching:
+      shouldSwitch = false;
+      /*Get the two elements you want to compare,
+      one from current row and one from the next:*/
+      x = rows[i].getElementsByTagName("TD")[colnumber];
+      y = rows[i + 1].getElementsByTagName("TD")[colnumber];
+      //check if the two rows should switch place:
+      
+      var a = x.innerHTML.toLowerCase();
+      var b = y.innerHTML.toLowerCase(); 
+      
+      if (isNumeric(a) && isNumeric(b) ){
+          a = parseFloat(a);
+          b = parseFloat(b);
+      }
+      var c;
+      if (invert){
+          c = a > b;
+      } else {
+          c = a < b;
+      }
+          
+      if (c ) {
+        //if so, mark as a switch and break the loop:
+        
+        
+        shouldSwitch= true;
+        break;
+      }
+    }
+    if (shouldSwitch) {
+      /*If a switch has been marked, make the switch
+      and mark that a switch has been done:*/
+      rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+      switching = true;
+    }
+  }
+}
+
+
+function makeTable(){
+    
+    var table = document.createElement('table');
+    table.id='datatable';
+    
+    var body = table.createTBody();
+    
+    for (var i=0;i<datafiles.length;i++){
+        var row = body.insertRow();
+        var cell = row.insertCell();
+        
+        var a = document.createElement('a');
+        a.href = "viewer.html?" + datafiles[i]['attr']['_file name'];
+        a.textContent = datafiles[i]['attr']['_file name'];
+        a.target = '_blank';
+        cell.appendChild(a);
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['title'];
+        
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['subtitle'];
+        
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['sample'];
+        
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['series'];
+        
+        var cell = row.insertCell();
+        cell.innerHTML = (new Date(datafiles[i]['attr']['_time start'])).toLocaleString();
+        
+        var cell = row.insertCell();
+        cell.innerHTML = (new Date(datafiles[i]['attr']['_time end'])).toLocaleString();
+        
+        var cell = row.insertCell();
+        cell.innerHTML = Object.keys(datafiles[i]['attr']['_devices start']);
+        
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['tags'];
+        
+        var cell = row.insertCell();
+        cell.innerHTML = Object.keys(datafiles[i]['data']);
+        
+        var cell = row.insertCell();
+        var dataname = Object.keys(datafiles[i]['data'])[0];
+        cell.innerHTML = datafiles[i]['data'][dataname].length;
+        
+        var cell = row.insertCell();
+        cell.innerHTML = datafiles[i]['attr']['description'];
+        
+        
+    }
+    
+    //make the headdings
+    var headdings = ['Filename','Title','Subttitle','sample','series','start time','stop time','devices','tags','cols','size','descriptsion']
+    var header = table.createTHead();
+    var row = header.insertRow();
+    for (var i=0;i<headdings.length;i++){
+        var cell = row.insertCell();
+        cell.innerHTML = headdings[i];
+        cell.dataset.m_colnumber = i;
+        cell.dataset.m_invert =0;
+        cell.addEventListener('click', function(e){
+            var j = parseInt( this.dataset.m_colnumber );
+            var invert = parseInt( this.dataset.m_invert );
+            this.dataset.m_invert = (invert + 1)%2;
+            sortTable(j,invert);
+            }, false);
+    }
+
+    
+    var div = document.getElementById('divTable');
+    div.appendChild(table);
+    
+}
+
+loadAjaxFiles();
+
+
+</script>
+</body>
+</html>

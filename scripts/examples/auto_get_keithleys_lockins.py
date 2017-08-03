@@ -69,17 +69,17 @@ def acqFunction(coordinates,results,prev_coordinates,prev_result,user_storage):
     
     #auto get all/any the keithleys
     for keithley in ['keithley1','keithley2','keithley3','keithley4']
-		if keithley in devices:
-			results[keithley] = devices[keithley].get_readnextval()
-	#auto get all/any the lockins
+        if keithley in devices:
+            results[keithley] = devices[keithley].get_readnextval()
+    #auto get all/any the lockins
     for lockin in ['lockin1','lockin2','lockin3','lockin4']
-		if lockin in devices:
-			results[lockin+' X'] = devices[keithley].get_X()
-			results[lockin+' Y'] = devices[keithley].get_Y()
-			results[lockin+' R'] = devices[keithley].get_R()
-			results[lockin+' P'] = devices[keithley].get_P()
-			results[lockin+' F'] = devices[keithley].get_frequency()
-	
+        if lockin in devices:
+            results[lockin+' X'] = devices[keithley].get_X()
+            results[lockin+' Y'] = devices[keithley].get_Y()
+            results[lockin+' R'] = devices[keithley].get_R()
+            results[lockin+' P'] = devices[keithley].get_P()
+            results[lockin+' F'] = devices[keithley].get_frequency()
+
     
     #k1 = devices['kiethley1'].get_readnextval()
     #l1_f = devices['lockin1'].get_frequency()
