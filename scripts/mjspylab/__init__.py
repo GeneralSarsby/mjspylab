@@ -24,12 +24,12 @@ import os,math,json,codecs,datetime,qt,timetrack,sys,traces,shutil,itertools,tim
 import dateutil.parser
 
 header = """                            ===  QTLab + MJSpylab  ===
-      Author: MJS 2017                                     Version: 0_0_5
+      Author: MJS 2017                                     Version: 0_0_6
       
 """
-version = '0.0.5'
-generator_string = 'qtlab, mjspylab.0.0.5'
-schema_string = 'TUDelft.QuTech.Topo.MJS.0.0.5'
+version = '0.0.6'
+generator_string = 'qtlab, mjspylab.0.0.6'
+schema_string = 'TUDelft.QuTech.Topo.MJS.0.0.6'
 manifest_name = 'data_manifest.json'
 #from builtins import input
 #import pandas as pd
@@ -69,30 +69,34 @@ def _equalLenghtTable(table,i):
     'make all arrays in the table dictionary at least as long as i'
     for k in table:
         if i >= len(table[k]):
-            l.extend(  [0]*  (i+1-len(l)) )
+            table[k].extend(  [0]*  (i+1-len(table[k])) )
     
 def _getCoordinateSummary(coordinates):
     #make a coordinates summary dict
-    coord_summary = {}
+    coord_summary_a = []
+    
     for c in coordinates:
-        name = c['name']
+        coord_summary = {}
         val = c['range']
-        coord_summary[ name ] = {}
-        coord_summary[ name ]['min'] = np.min(val )
-        coord_summary[ name ]['max'] = np.max( val )
-        coord_summary[ name ]['size'] = np.size( val )
-    return coord_summary
+        coord_summary['name'] = c['name']
+        coord_summary['min'] = np.min(val )
+        coord_summary['max'] = np.max( val )
+        coord_summary['size'] = np.size( val )
+        coord_summary['description'] = c['name']+ ':' + str(np.min( val )) + ' - ' + str(np.max(val )) + ' (' +str(np.size( val )) +  ' pts)'
+        coord_summary_a.append(coord_summary)
+    return coord_summary_a
 
 def _iso_datetime_string():
     return datetime.datetime.utcnow().isoformat()+'Z'
 
 
 def aquireData(devices=None,
-               coordinates=None,
+               coordinatesArray=None,
                acqFunction=None, # inside the main loop
                resetFunction=None,
                setupFunction=None,
                data_folder = None,
+               shared_folder = None,
                save_backwards_compatable_files = False,
                save_self_script = False,
                show_live_plot = False,
@@ -101,7 +105,7 @@ def aquireData(devices=None,
     'measure using the user defined aquisition functions'
     
        
-    if None in (devices, coordinates, acqFunction,resetFunction,
+    if None in (devices, coordinatesArray, acqFunction,resetFunction,
         setupFunction,data_folder,attributes):
         print('Something is not defined. We can not run the script')
         return {}
@@ -122,7 +126,7 @@ def aquireData(devices=None,
     attributes['_file name'] = file_name
     attributes['_file path'] = file_path
     
-    attributes['_coordinates'] = _getCoordinateSummary(coordinates)
+    attributes['_coordinates'] = _getCoordinateSummary(coordinatesArray)
     
     _saveToManifest(measurement,data_folder)
     
@@ -141,8 +145,8 @@ def aquireData(devices=None,
     
     
     
-    coords = [e['range'] for e in coordinates]# [c['range'] for c in coordinates]
-    coordnames =  [e['name'] for e in coordinates]#[c['name'] for c in coordinates]
+    coords = [e['range'] for e in coordinatesArray]# [c['range'] for c in coordinates]
+    coordnames =  [e['name'] for e in coordinatesArray]#[c['name'] for c in coordinates]
     
     
     length=1
@@ -243,12 +247,29 @@ def aquireData(devices=None,
     self_script = inspect.getsource(sys.modules['__main__'])
     attributes['_aquisition script'] = self_script
     
+    
+    
     if save_self_script:
         with open(file_path+'.py', 'w') as f:
             f.write( self_script )
         
     
     _saveMeasurement(measurement,file_path)
+    if save_backwards_compatable_files:
+        _saveBackwardsCompatableFiles(file_path,measurement)
+                    
+                    
+    if shared_folder:
+        try:
+            print('saving a copy to the shared drive. ', end='')
+            _saveMeasurement(measurement,shared_folder + file_name,fast=False)
+            _saveToManifest(measurement,shared_folder)
+            if save_backwards_compatable_files:
+                _saveBackwardsCompatableFiles(shared_folder + file_name,measurement)
+        except:
+            print('NOT OK')
+        print('OK')
+    
     return measurement
     
     
@@ -335,18 +356,20 @@ def _saveBackwardsCompatableFiles(file_path,d,quite=True):
     s += '# Timestamp: ' +  the_time.strftime("%a %b %d %H:%M:%S %Y") + '\n\n'
     i=1; #keep track of column numbers
     keys = []
-    for k in d['attr']['_coordinates']:
+    #for k in d['attr']['_coordinates']:
+    for k_idx in range(len(d['attr']['_coordinates'])):
+        k = d['attr']['_coordinates'][k_idx]['name']
         keys.append(k)
         s += '# Column ' + str(i) +":\n"
-        s+= '#\tend: '+str(d['attr']['_coordinates'][k]['max']) + '\n'
+        s+= '#\tend: '+str(d['attr']['_coordinates'][k_idx]['max']) + '\n'
         s+= '#\tname: '+ str(k) + '\n'
-        s+= '#\tsize: '+ str(d['attr']['_coordinates'][k]['size']) + '\n'
-        s+= '#\tstart: '+ str(d['attr']['_coordinates'][k]['min']) + '\n'
+        s+= '#\tsize: '+ str(d['attr']['_coordinates'][k_idx]['size']) + '\n'
+        s+= '#\tstart: '+ str(d['attr']['_coordinates'][k_idx]['min']) + '\n'
         s += '#\ttype: coordinate\n'
         i+=1
-        
+    cordnames = [ el['name'] for el in d['attr']['_coordinates'] ] 
     for col in d['data']:
-        if col not in d['attr']['_coordinates']:
+        if col not in cordnames:
             keys.append(col)
             s += '# Column ' + str(i) +":\n"
             s += '#\tname: ' + str( col ) +"\n"
@@ -373,14 +396,15 @@ def _saveBackwardsCompatableFiles(file_path,d,quite=True):
     s = ''
     i=0
     if '_coordinates' in d['attr']:
-        for k in d['attr']['_coordinates']:
-            s+= str(d['attr']['_coordinates'][k]['size']) + '\n'
-            s+= str(d['attr']['_coordinates'][k]['min']) + '\n'
-            s+= str(d['attr']['_coordinates'][k]['max']) + '\n'
-            s+= str(k) + '\n'
+        #for k in d['attr']['_coordinates']:
+        for k_index in range(len(d['attr']['_coordinates'])):
+            s+= str(d['attr']['_coordinates'][k_index]['size']) + '\n'
+            s+= str(d['attr']['_coordinates'][k_index]['min']) + '\n'
+            s+= str(d['attr']['_coordinates'][k_index]['max']) + '\n'
+            s+= str(d['attr']['_coordinates'][k_index]['name']) + '\n'
             i+=1
         for col in d['data']:
-            if col not in d['attr']['_coordinates']:
+            if col not in cordnames:
                 # it is a value not a coordinates
                 i+=1
                 s+= str(i) + '\n'
