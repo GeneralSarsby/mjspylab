@@ -12,6 +12,9 @@ mjs_plot is distributed with hope it will be useful
 but WITHOUT ANY WARRANTY.
 
 see CHANGES.txt for more details.
+* 
+* added force option to xlabel and ylabel to change the axis and draw an update.
+* added %datetime and %time as special string in labels.
 *********************************************** */
 
 mjs_plot = (function () {
@@ -9541,18 +9544,28 @@ new_graph : function (canvasID,oldcanvasID){
 	},
 	
 	
-	title : function(title,subtitle,subsubtitle){
+	title : function(title,subtitle,subsubtitle,force){
 		this.default_graphics_style.title = title;
 		if (subtitle){this.default_graphics_style.subtitle = subtitle;}
 		if (subsubtitle){this.default_graphics_style.subtitle2 = subsubtitle;}	
 		return this;
 	},
-	xlabel : function(s){
+	xlabel : function(s,force){
 		this.default_graphics_style.x_axis_title = s;
+        if (force){
+            this.graphics_style.x_axis_title = s;
+            this.transform_index--;
+            this.draw();
+        }
 		return this;
 	},
-	ylabel : function(s){
+	ylabel : function(s,force){
 		this.default_graphics_style.y_axis_title = s;
+        if (force){
+            this.graphics_style.y_axis_title = s;
+            this.transform_index--;
+            this.draw();
+        }
 		return this;
 	},
 	xlim: function(min,max){
@@ -10285,6 +10298,11 @@ new_graph : function (canvasID,oldcanvasID){
 			if (low == high){
 				low = 0.6*Math.min(low,high);
 				high = 1.6*Math.max(low,high);
+			}
+            if (low == high){
+                scale = 'lin';
+				low = -10;
+				high = 10;
 			}
 			
 		return {low:low, high:high, automax:automax,automin:automin,scale:scale};
