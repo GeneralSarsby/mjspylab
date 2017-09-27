@@ -185,6 +185,44 @@ function sparkline(data,stats){
 	return canvas;
 }
 
+function makeImage(dataurl){
+	var container = document.createElement("div");
+	var infospan = document.createElement("p");
+	infospan.className = 'string syntax';
+	image = new Image();
+	
+	
+	image.addEventListener('load', function() {
+		infospan.textContent = 'width:' + image.width + 'px, height:' +  image.height + 'px, ' + (dataurl.length/1024).toPrecision(2)+'kB' ;
+    }, false);
+	
+	image.src = dataurl;
+	container.appendChild(image); 
+	container.appendChild(infospan); 
+	return container;
+}
+
+function urlLoader(url){
+	var container = document.createElement("iframe");
+	container.style.width = '100%'
+	container.style.height = '400px'
+	
+	container.src = url;
+	return container;
+}
+
+function htmlLoader(s,base64){
+	if (base64){
+		s = window.atob(s);
+	}
+	var container = document.createElement("div");
+	container.style.width = '100%';
+	//container.style.height = '400px';
+	
+	container.innerHTML = s;
+	
+	return container;
+}
 
 function mjs_precision(number,precision){
 	if (! isFinite(number)){return  'Nan';}
@@ -227,6 +265,15 @@ function new_window_with_text(text,title,width,height){
  window.open(url, title, "width="+width+", height="+height);		
 }
 
+function getString(promptString,fallback){
+	var r = prompt(promptString,fallback);
+	if (typeof r ==='string'){
+		return r;
+	} else {
+	 return fallback;
+	}
+}
+
 function mjs_time_difference_print(milliseconds){
 	//for printing the elapsed time. not absolute time.
 	var sign = milliseconds > 0;
@@ -247,6 +294,18 @@ function mjs_time_difference_print(milliseconds){
 	return s;
 }
 
+var joinPath = function(path){
+		r = '';
+		for (var i=0; i<path.length; i++){
+			if (  typeof path[i] === 'number'  ){
+				r+= '[' + path[i] + ']';
+			} else {
+				r+= '["' + path[i] + '"]';
+			}
+		}
+		return r;
+	};
+
 var module, window;
 (module||{}).exports = (window||{}).renderjson = (function() {
     var themetext = function(/* [class, text]+ */) {
@@ -266,17 +325,7 @@ var module, window;
 		}
 		return el;
 	};
-	var joinPath = function(path){
-		r = '';
-		for (var i=0; i<path.length; i++){
-			if (  typeof path[i] === 'number'  ){
-				r+= '[' + path[i] + ']';
-			} else {
-				r+= '["' + path[i] + '"]';
-			}
-		}
-		return r;
-	};
+	
 	
 	
 	var indentText = '  ';
@@ -363,6 +412,47 @@ var module, window;
                 return append(as, themetext(null, indent, "string syntax", " "));
                 
             }); 
+            
+            
+        //strings that contain a data url
+        if (typeof(json) == "string" && json.length > 26 && (json.indexOf("data:image/png;base64") == 0 || json.indexOf("data:image/jpeg;base64") == 0  ) )
+            return disclosure('"', json.substr(0,26)+".", themetext("string syntax", '"', null, '(Image)')  , "", function () {
+				var as = append(span("string"), themetext("string syntax", " ", null, "\n"));
+				// new_window_with_text(text,title,width,height)
+				 
+                return append(as, makeImage(json) );
+                
+            });  
+        // string of a webpage
+        if (typeof(json) == "string" && json.length > 8 && (json.indexOf("http://") == 0 || json.indexOf("https://") == 0  ) )
+            return disclosure('"', json.substr(0,26)+".", themetext("string syntax", '"', null, '(Webpage)')  , "", function () {
+				var as = append(span("string"), themetext("string syntax", " ", null, "\n"));
+				append(as, themetext('string', indent + "    "+  '"' +json+'"' ,null,'\n'));
+				// new_window_with_text(text,title,width,height)
+				 
+                return append(as, urlLoader(json) );
+                
+            }); 
+        //string of a html, with base64
+        if (typeof(json) == "string" && json.length > 23 && json.indexOf("data:text/html;base64,") == 0  )
+            return disclosure('"', json.substr(0,26)+".", themetext("string syntax", '"', null, '(html+base64)')  , "", function () {
+				var as = append(span("string"), themetext("string syntax", " ", null, "\n"));
+				// new_window_with_text(text,title,width,height)
+				 
+                return append(as, htmlLoader(json.substring(22) ,true) );
+                
+            }); 
+        //string of a html, not base64
+        if (typeof(json) == "string" && json.length > 16 && json.indexOf("data:text/html,") == 0  )
+            return disclosure('"', json.substr(0,26)+".", themetext("string syntax", '"', null, '(html)')  , "", function () {
+				var as = append(span("string"), themetext("string syntax", " ", null, "\n"));
+				// new_window_with_text(text,title,width,height)
+				 
+                return append(as, htmlLoader(json.substring(15) ,false) );
+                
+            });
+        
+        
         //multi line strings that are kind of long. 
         if (typeof(json) == "string" && json.length > 26 && json.indexOf("\n") >= 0 )
             return disclosure('"', json.substr(0,26)+" ...", themetext("string syntax", '"')  , "", function () {
@@ -394,11 +484,11 @@ var module, window;
 			
 			var setxbutton = document.createElement("button");
 				setxbutton.innerHTML = "Set x";
-				setxbutton.onclick = function(){ loadX(json,keypath)}
+				setxbutton.onclick = function(){ loadX(keypath)}
 				
 				var setybutton = document.createElement("button");
 				setybutton.innerHTML = "Set y";
-				setybutton.onclick = function(){ loadY(json,keypath)}
+				setybutton.onclick = function(){ loadY(keypath)}
 				
 			
             return disclosure("[", " ... ", append( span(''), themetext("array syntax",  "] ("+json.length+' items)') ,setxbutton, setybutton), "array", function () {
@@ -406,13 +496,25 @@ var module, window;
 				indent+=indentText;
 				var setxbutton = document.createElement("button");
 				setxbutton.innerHTML = "Set x";
-				setxbutton.onclick = function(){ loadX(json,keypath)}
+				setxbutton.onclick = function(){ loadX(keypath)}
 				
 				var setybutton = document.createElement("button");
 				setybutton.innerHTML = "Set y";
-				setybutton.onclick = function(){ loadY(json,keypath)}
+				setybutton.onclick = function(){ loadY(keypath)}
+                
+                var setzbutton = document.createElement("button");
+				setzbutton.innerHTML = "Set z";
+				setzbutton.onclick = function(){ loadZ(keypath)}
+                
+                var setgroupbutton = document.createElement("button");
+				setgroupbutton.innerHTML = "Set group";
+				setgroupbutton.onclick = function(){ loadGroupBy(keypath)}
+                
+                var setfilterbutton = document.createElement("button");
+				setfilterbutton.innerHTML = "Set filter ...";
+				setfilterbutton.onclick = function(){ loadFilter(keypath,getString('use, el, >, <, >=, <=, ==, x, y and maths','el < 16'))}
 				
-				append(as, text(indent+indentText), setxbutton,  setybutton , text("\n") );
+				append(as, text(indent+indentText), setxbutton,  setybutton , setzbutton,setgroupbutton,setfilterbutton,  text("\n") );
 	
 
                 var allAreNumbers = true;
@@ -484,14 +586,28 @@ var module, window;
         var removebutton = document.createElement("button");
 		removebutton.innerHTML = "remove";
 		removebutton.onclick = function(){  pre.remove(); removeJson(filename); }
-		removebutton.className = 'removeButton'
-		append(pre, removebutton )
+		removebutton.className = 'removeButton';
+		append(pre, removebutton );
 		if (reloadable){
-		var reloadbutton = document.createElement("button");
+			var reloadbutton = document.createElement("button");
 			reloadbutton.innerHTML = "reload";
-			reloadbutton.onclick = function(){  pre.remove(); reloadFile(filename);   }
-			reloadbutton.className = 'removeButton'
-			append(pre, reloadbutton )
+			var relaodlhasdf = function(){  pre.remove(); reloadFile(filename); console.log("reload works")}
+			reloadbutton.onclick = relaodlhasdf;
+			reloadbutton.className = 'removeButton';
+			append(pre, reloadbutton );
+			var spacebarreloadfunction =  function (e) {
+				e = e || window.event;
+				switch (e.which || e.keyCode) {
+				    case 32 : 
+				    	document.removeEventListener('keydown',spacebarreloadfunction,false );
+				    	relaodlhasdf();
+						break;
+				}
+				console.log("space works")
+			}
+
+			document.addEventListener('keydown',spacebarreloadfunction,false
+			);
 		}
 		//append(as, text(indent+indentText), setxbutton,  setybutton , text("\n") );
 
