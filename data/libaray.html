@@ -1,13 +1,35 @@
 <!DOCTYPE html>
 <html><head>
+<!-- version 1.2 -->
 <meta http-equiv="content-type" content="text/html; charset=UTF8">
 <script src="mjs_plot_0_4_n.js"></script>
 <script src="renderjson.js"></script>
 <style>
 
+body {padding: 43px 0 0;}
+.pageHeader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #eaeaea;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
 #divTable {
     font-size:small;
     
+}
+.number {
+    color: darkgreen;
+}
+.boolean {
+    color: red;
+}
+#datatable {
+  overflow-x: scroll;
+  word-wrap: none;
+  white-space: nowrap;
 }
 
 tr:nth-child(even) {
@@ -25,38 +47,138 @@ thead {
   font-family:sans;
 }
 
+textarea {
+  height:1.3em
+}
+
+.starspan {
+  font-size:medium;
+}
+.starspanstars0{  color:black;}
+.starspanstars1{  color:#4A3B21;}
+.starspanstars2{  color:#7A5E30;}
+.starspanstars3{  color:#AA7F39;}
+.starspanstars4{  color:#DA9F3C;}
+.starspanstars5{  color:#FFB437;}
+.unstared {  color:black;}
+
+
+tr:hover {
+    background-color: #ddd;
+    color: #000;    
+}
+
+tr.selected {
+    background-color: #aaa;
+    color: #000;    
+}
+
+/* Column editor */
+#coleditor {
+  position: fixed;
+  display:none;
+  background: white;
+  top: 43px;
+  left: 25%;
+  right: 25%;
+  bottom: 25%;
+  min-width: 800px;
+  min-height: 650px;
+  /*margin-left:1em; */
+  padding:1em;
+  /*border-left:1px solid black;*/
+}
+
+#coldeftext {  
+  display: block;
+  max-width: 800px;
+  width: 100%;
+  height: 400px;
+
+}
+
+
 </style>
 </head>
 <body>
     
-<div>
-<input id='filterstring' placeholder="Filter string" type='text' onkeydown="if (event.keyCode == 13) { runfilter(); return false; }"> </input>
+<div class='pageHeader'>
+<span><em>Matt's json data library</em> <span><input id='filterstring' placeholder="Filter string" type='text' onkeydown="if (event.keyCode == 13) { runfilter(); return false; }"> </input>
 <button onclick='runfilter()'> Filter </button>
 <button onclick='showAllTable()'> Reset Filter </button>
-
+<button onclick='reload_manifest()'> Update Manifest (beta) </button>
+<button onclick='remakeTable()'> Remake Table (beta) </button>
+<button onclick='togglecoleditor()'> Column Editor (beta) </button>
+<button onclick='downloadComments()'> backup comments </button>
 
 </div>
-    
+<div id='coleditor'>
+<p> Set the function and paths used to populate the columns. Set the "Header" to be the column header, "function" to be the name of a 'getter' function defined below:</p>
+<pre>
+<b>value</b> : gets value at the path
+<b>keys</b> : gets keys from the object at the path
+<b>numkeys</b> : get the number of keys of the object at the path
+<b>len</b> : gets the length of the array at path
+</pre>
+<p>The function load the object at "path" which is an array of strings for accessing nested objects. "Fallback" is the fallback string.</p>
+<button onclick='togglecoleditor();remakeTable()'> Remake Table (beta) </button>
+<textarea id="coldeftext" spellcheck="false">
+column_definitions = [
+{"Header":"Filename","function":"filename","path":["attr","_file name"],"fallback":""},
+{"Header":"Comments","function":"comments","path":["attr","_file name"],"fallback":""},
+{"Header":"Stars","function":"stars","path":["attr","_file name"],"fallback":""},
+{"Header":"Title","function":"value","path":["attr","title"],"fallback":" "},
+{"Header":"Series","function":"value","path":["attr","series"],"fallback":" "},
+// {"Header":"Subtitle","function":"value","path":["attr","subtitle"],"fallback":" "},
+{"Header":"Device","function":"value","path":["attr","device"],"fallback":" See description"},
+{"Header":"Sample","function":"value","path":["attr","sample"],"fallback":" "},
+{"Header":"Start time","function":"datetime","path":["attr","_time start"],"fallback":" "},
+{"Header":"End time","function":"datetime","path":["attr","_time end"],"fallback":" "},
+{"Header":"Connected devices","function":"keys","path":["attr","_devices start"],"fallback":" "},
+{"Header":"Tags","function":"value","path":["attr","tags"],"fallback":" "},
+{"Header":"Finished","function":"value","path":["attr","_completed"],"fallback":" Unknown"},
+// {"Header":"Cols","function":"keys","path":["data"],"fallback":" "},
+{"Header":"Rows","function":"len","path":["data","_time"],"fallback":" "},
+{"Header":"Description","function":"value","path":["attr","description"],"fallback":" "},
+{"Header":"Coordinates 0","function":"value","path":["attr","_coordinates",0,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 1","function":"value","path":["attr","_coordinates",1,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 2","function":"value","path":["attr","_coordinates",2,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 3","function":"value","path":["attr","_coordinates",3,"description"],"fallback":" Unknown "}
+]
+</textarea>
+</div>
+
 <div id="divTable" >
 
 </div>
+
+
 <script>
 
+function togglecoleditor(){
+    var div = document.getElementById("coleditor");
+    
+    if (div.style.display === "none"){
+        div.style.display = 'block';
+    } else {
+        div.style.display = 'none';
+    }
+
+}
 
 
-function readTextFile(file,callback){
+function readTextFile(file,callback,fail_callback){
     var rawFile = new XMLHttpRequest();
-    rawFile.open("GET", file, true);
+    rawFile.open("GET", './'+file, true);
+	console.log('getting file '+file )
 	rawFile.overrideMimeType("application/json");
-    rawFile.onreadystatechange = function ()
-    {
-        if(rawFile.readyState === 4)
-        {
-            if(rawFile.status === 200 || rawFile.status == 0)
-            {
+    rawFile.onreadystatechange = function (){
+		if(rawFile.readyState === 4){
+            if(rawFile.status === 200 ){ //|| rawFile.status == 0
 				var v = rawFile.responseText;
-				//console.log(v);
-                callback(  JSON.parse( rawFile.responseText ), file );
+                callback(  JSON.parse( v ), file );
+            } else {
+                fail_callback(file);
             }
         }
     }
@@ -73,30 +195,86 @@ function removeJson(name){
 }
 
 
+function merge_objects(obj1,obj2){
+	obj1 = (typeof obj1 === 'object') ?  obj1 : {};
+	obj2 = (typeof obj2 === 'object') ?  obj2 : {};
+    var obj3 = {};
+    for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
+    for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
+    return obj3;
+}
+
+loadedComments = {}
+function loadComments(){
+	loadedComments = JSON.parse(localStorage.getItem("comments")) || {};
+	readTextFile( 'comments.json', function(obj,name){ 
+        loadedComments = merge_objects(loadedComments,obj);
+        }
+    );
+}
+loadComments();
+function saveCommentsLocal(){
+	localStorage.setItem('comments',JSON.stringify(loadedComments) );
+}
+function downloadComments(){
+	download_text(JSON.stringify(loadedComments),'comments.json','data:application/json;charset=utf-8,' );
+}
+
+window.onbeforeunload = function(){
+  saveCommentsLocal();
+};
+
+function download_text(text,filename,type){
+	console.log('downloading' + filename);
+	console.log(text);
+	var ftype = type || 'data:text/plain;charset=utf-8,';
+	var pom = document.createElement('a');
+	pom.setAttribute('href', ftype+',' + encodeURIComponent(text));
+	pom.setAttribute('download', filename);
+	pom.style.display = 'none';
+	document.body.appendChild(pom);
+	pom.click();
+	document.body.removeChild(pom);
+}
 
 // load json by ajax from the search string part of the url
 function loadAjaxFiles(){
 	readTextFile( 'data_manifest.json', function(obj,name){ 
         manifest = obj;
         manifest_read_index = 0;
-        setTimeout(readNextdatafile,10);
+        setTimeout(readNextdatafile,100);
         }
     );
 }
 
+function reload_manifest(){
+    var old_manifest = manifest;
+    readTextFile( 'data_manifest.json', function(obj,name){ 
+        manifest = obj;
+        //manifest_read_index = 0;
+        //manifest_read_index = manifest_read_index - 1;
+        
+        setTimeout(readNextdatafile,100);
+        }
+    );
+}
+
+
 function readNextdatafile(){
     if (manifest_read_index < manifest.length){
-        console.log('will read file ' + manifest[manifest_read_index]['filename']);
-        readTextFile( manifest[manifest_read_index]['filename'], function(obj,name){ 
-            datafiles.push(obj);
-            console.log('read file ' + manifest[manifest_read_index]['filename']);
-        });
-        manifest_read_index +=1;
-        setTimeout(readNextdatafile,10);
-        
-    } else {
-        makeTable()
-    }
+	
+		readTextFile( manifest[manifest_read_index]['filename'],
+            function(obj,name){ 
+                    addRow(obj);
+                    setTimeout(readNextdatafile,1);
+            },
+            function(file){ 
+                    console.log('failed to read file ' + file);
+                    setTimeout(readNextdatafile,1);
+            }
+        );
+		manifest_read_index +=1;
+    } 
 }
 
 
@@ -116,7 +294,6 @@ function fromPath(obj,parts){
 }
 
 function containsString(el,s){
-    
     if (el.textContent.indexOf(s)>-1){
         return true;
     } else {
@@ -126,7 +303,6 @@ function containsString(el,s){
         }
         return b;
     }
-    
 }
 
 function runfilter(){
@@ -201,9 +377,13 @@ function sortTable(colnumber,invert) {
       y = rows[i + 1].getElementsByTagName("TD")[colnumber];
       //check if the two rows should switch place:
       
-      var a = x.innerHTML.toLowerCase();
-      var b = y.innerHTML.toLowerCase(); 
+      //var a = x.innerHTML.toLowerCase();
+      //var b = y.innerHTML.toLowerCase(); 
+      var a = x.dataset.sortvalue;
+      var b = y.dataset.sortvalue;
       
+	  
+	  
       if (isNumeric(a) && isNumeric(b) ){
           a = parseFloat(a);
           b = parseFloat(b);
@@ -232,6 +412,303 @@ function sortTable(colnumber,invert) {
   }
 }
 
+/*
+ it goes like: "title" fun path fallback
+ functions are 
+
+value : gets value at the path
+keys : gets keys from the object at the path
+numkeys : get the number of keys of the object at the path
+len : gets the length of the array at path
+*/
+
+column_definitions = [
+{"Header":"Filename","function":"filename","path":["attr","_file name"],"fallback":""},
+{"Header":"Comments","function":"comments","path":["attr","_file name"],"fallback":""},
+{"Header":"Stars","function":"stars","path":["attr","_file name"],"fallback":""},
+{"Header":"Title","function":"value","path":["attr","title"],"fallback":" "},
+{"Header":"Series","function":"value","path":["attr","series"],"fallback":" "},
+// {"Header":"Subtitle","function":"value","path":["attr","subtitle"],"fallback":" "},
+{"Header":"Device","function":"value","path":["attr","device"],"fallback":" See description"},
+{"Header":"Sample","function":"value","path":["attr","sample"],"fallback":" "},
+{"Header":"Start time","function":"datetime","path":["attr","_time start"],"fallback":" "},
+{"Header":"End time","function":"datetime","path":["attr","_time end"],"fallback":" "},
+{"Header":"Connected devices","function":"keys","path":["attr","_devices start"],"fallback":" "},
+{"Header":"Tags","function":"value","path":["attr","tags"],"fallback":" "},
+{"Header":"Finished","function":"value","path":["attr","_completed"],"fallback":" Unknown"},
+// {"Header":"Cols","function":"keys","path":["data"],"fallback":" "},
+{"Header":"Rows","function":"len","path":["data","_time"],"fallback":" "},
+{"Header":"Description","function":"value","path":["attr","description"],"fallback":" "},
+{"Header":"Coordinates 0","function":"value","path":["attr","_coordinates",0,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 1","function":"value","path":["attr","_coordinates",1,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 2","function":"value","path":["attr","_coordinates",2,"description"],"fallback":" Unknown "},
+{"Header":"Coordinates 3","function":"value","path":["attr","_coordinates",3,"description"],"fallback":" Unknown "}
+]
+
+
+function arrayToString(a){
+    return '['+a.join(', ') +']';
+}
+
+function valueformatter(obj){
+    if (isBoolean(obj)){
+     return code(obj,'boolean');
+    }
+    if (isNumber(obj)){
+     return code(obj,'number');
+    }
+    if (Array.isArray(obj)){
+        obj = arrayToString(obj)
+    }
+    return span(obj)
+}
+
+function safeValueGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	for (var i=0;i<path.length;i++){
+		if (obj.hasOwnProperty(path[i])){
+			obj = obj[path[i]];
+		} else {
+			return [valueformatter(fallback),fallback];
+		}
+	}
+	return [valueformatter(obj),obj]
+}
+
+
+function isBoolean(value){
+    if(typeof(value) === "boolean"){
+        return true;
+    }
+}
+
+function isNumber(value) {
+    if ((undefined === value) || (null === value)) {
+        return false;
+    }
+    if (typeof value == 'number') {
+        return true;
+    }
+    return !isNaN(value - 0);
+}
+
+function safeKeysGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	var o = safeValueGetter(obj,path,fallback)[1]
+	if (typeof o === 'object'){
+		return [valueformatter(Object.keys(o)),Object.keys(o)];
+	} else {
+		return [valueformatter(fallback),0];
+	}
+}
+
+function safeLenGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	var o = safeValueGetter(obj,path,fallback)[1]
+	if (Array.isArray(o)){
+		return [valueformatter(o.length),o.length];
+	} else {
+		return [valueformatter(fallback),0];
+	}
+}
+
+function safenumkeysGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	var o = safeValueGetter(obj,path,fallback)[1]
+	if (typeof o === 'object'){
+		var l =Object.keys(o).length;
+		return  [valueformatter(l), l];
+	} else {
+		return [valueformatter(fallback),0];
+	}
+}
+
+function safefilenameGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	var o = safeValueGetter(obj,path,fallback)[1]
+	if (typeof o === 'string'){
+		return  [  a("viewer.html?" + o,span(o))  , o];
+	} else {
+		return [span(fallback),0];
+	}
+}
+
+function makeandset(obj,path,value){
+	//makes a value at a path, making objects along the way if needed
+	for (var i=0;i<path.length-1;i++){
+		if (obj.hasOwnProperty(path[i])){
+			obj = obj[path[i]];
+		} else {
+			obj[path[i]] = {};
+			obj = obj[path[i]];
+		}
+	}
+	obj[path[[i]]] = value;
+}
+
+
+function Commentsgetter(obj,path,fallback){
+	var name = safeValueGetter(obj,path,fallback)[1]; //the name of the file being commented on
+	var textarea = document.createElement('textarea');
+	
+	if (loadedComments.hasOwnProperty(name)){
+		if (loadedComments[name].hasOwnProperty('comments')){
+			textarea.value = loadedComments[name]['comments'];
+		} 
+	} 
+	textarea.addEventListener('input',
+		function(){
+			makeandset(loadedComments,[name,'comments'],this.value );
+			
+			//loadedComments[name]['comments'] = this.value;
+		},
+		false
+	);
+	return [textarea,0];
+}
+
+function Starsgetter(obj,path,fallback){
+	var name = safeValueGetter(obj,path,fallback)[1]; //the name of the file being commented on
+	var starspan = document.createElement('span');
+	starspan.classList.add("starspan");
+	starspan.dataset.name = name;
+	
+	var stars = 0;
+	if (loadedComments.hasOwnProperty(name)){
+		if (loadedComments[name].hasOwnProperty('stars')){
+			stars = loadedComments[name]['stars'];
+		}
+	} 
+	starspan.dataset.i = stars;
+	function updatestarspan(){
+		var children = starspan.children;
+		if (starspan.parentNode){
+			starspan.parentNode.dataset.sortvalue = starspan.dataset.i;
+		}
+		for (var i = 0; i < children.length; i++) {
+		  if (i < starspan.dataset.i){
+			children[i].textContent = '★';
+			if( children[i].classList.contains("unstared") ) {
+				children[i].classList.remove("unstared");
+			}
+			
+			
+		  } else {
+			children[i].textContent = '☆';
+			
+			if( ! children[i].classList.contains("unstared") ) {
+				children[i].classList.add("unstared");
+			}
+			
+		  }
+		  
+		  //loadedComments[starspan.dataset.name]['stars'] = starspan.dataset.i;
+		  if (parseInt(starspan.dataset.i) > 0){
+			makeandset(loadedComments,[starspan.dataset.name,'stars'],parseInt(starspan.dataset.i) );
+		  }
+		  if( starspan.classList.contains("starspanstars" + (i+1)) ) {
+			starspan.classList.remove("starspanstars" + (i+1));
+			}
+		}
+		starspan.classList.add("starspanstars" + starspan.dataset.i);
+	}
+	
+	for (var i=0;i<5;i++){
+		var ispan = document.createElement('span');
+		starspan.appendChild(ispan);
+		ispan.dataset.i = i+1;
+		ispan.onclick = function(){
+			this.parentNode.dataset.i = this.dataset.i;
+			updatestarspan();
+		}
+	}
+	updatestarspan();
+	return [starspan,stars];
+}
+
+
+function safedatetimeGetter(obj,path,fallback){
+	fallback = fallback || ' ';
+	var o = safeValueGetter(obj,path,fallback)[1]
+	if (typeof o === 'string'){
+        var s =(new Date(o)).toLocaleString()
+		return  [  span(s)  , o];
+	} else {
+		return [span(fallback),0];
+	}
+}
+
+
+
+//return [domelement,sortvalue]
+cellfunctions = {
+"value" : safeValueGetter,
+"keys" : safeKeysGetter,
+"len" : safeLenGetter,
+"numkeys" : safenumkeysGetter,
+"filename" : safefilenameGetter,
+"datetime" : safedatetimeGetter,
+"comments" : Commentsgetter,
+"stars" : Starsgetter
+}
+function a(ref,e){
+	var a = document.createElement('a');
+	a.href = ref;
+	a.appendChild(e);
+    a.target = '_blank'
+	return a;
+}
+function span(text,clas){
+	var s = document.createElement('span');
+	s.textContent = text;
+    if (clas){
+        s.classList.add(clas)
+    }
+	return s
+}
+function code(text,clas){
+	var s = document.createElement('code');
+	s.textContent = text;
+    if (clas){
+        s.classList.add(clas)
+    }
+	return s
+}
+function makecell(content,sortvalue){
+
+}
+
+function addRow(file){
+    var body =  document.getElementById('maintablebody');
+    var row = body.insertRow();
+    row.addEventListener("click", function(el){
+        if( this.classList.contains("selected") ) {
+            this.classList.remove("selected");
+        } else {
+            this.classList.add("selected");
+        }
+    }); 
+    for (var col_idx=0;col_idx<column_definitions.length;col_idx++){
+        col_def = column_definitions[col_idx];
+        var cell = row.insertCell();
+        var r = cellfunctions[col_def['function']]( file, col_def['path'], col_def['fallback'])
+        cell.appendChild(r[0]);
+        cell.dataset.sortvalue = r[1];
+    }
+
+}
+
+function remakeTable(){
+    column_definitions = eval( document.getElementById("coldeftext").value);
+    removeTable();
+    makeTable();
+    loadAjaxFiles();
+}
+
+function removeTable(){
+var table =  document.getElementById('datatable');
+    table.parentElement.removeChild(table);
+}
 
 function makeTable(){
     
@@ -239,61 +716,15 @@ function makeTable(){
     table.id='datatable';
     
     var body = table.createTBody();
+    body.id = 'maintablebody';
     
-    for (var i=0;i<datafiles.length;i++){
-        var row = body.insertRow();
-        var cell = row.insertCell();
-        
-        var a = document.createElement('a');
-        a.href = "viewer.html?" + datafiles[i]['attr']['_file name'];
-        a.textContent = datafiles[i]['attr']['_file name'];
-        a.target = '_blank';
-        cell.appendChild(a);
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['title'];
-        
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['subtitle'];
-        
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['sample'];
-        
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['series'];
-        
-        var cell = row.insertCell();
-        cell.innerHTML = (new Date(datafiles[i]['attr']['_time start'])).toLocaleString();
-        
-        var cell = row.insertCell();
-        cell.innerHTML = (new Date(datafiles[i]['attr']['_time end'])).toLocaleString();
-        
-        var cell = row.insertCell();
-        cell.innerHTML = Object.keys(datafiles[i]['attr']['_devices start']);
-        
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['tags'];
-        
-        var cell = row.insertCell();
-        cell.innerHTML = Object.keys(datafiles[i]['data']);
-        
-        var cell = row.insertCell();
-        var dataname = Object.keys(datafiles[i]['data'])[0];
-        cell.innerHTML = datafiles[i]['data'][dataname].length;
-        
-        var cell = row.insertCell();
-        cell.innerHTML = datafiles[i]['attr']['description'];
-        
-        
-    }
-    
-    //make the headdings
-    var headdings = ['Filename','Title','Subttitle','sample','series','start time','stop time','devices','tags','cols','size','descriptsion']
-    var header = table.createTHead();
+	var header = table.createTHead();
     var row = header.insertRow();
-    for (var i=0;i<headdings.length;i++){
-        var cell = row.insertCell();
-        cell.innerHTML = headdings[i];
-        cell.dataset.m_colnumber = i;
+	for (var col_idx=0;col_idx<column_definitions.length;col_idx++){
+		col_def = column_definitions[col_idx];
+		var cell = row.insertCell();
+        cell.innerHTML = col_def['Header'];
+        cell.dataset.m_colnumber = col_idx;
         cell.dataset.m_invert =0;
         cell.addEventListener('click', function(e){
             var j = parseInt( this.dataset.m_colnumber );
@@ -301,14 +732,12 @@ function makeTable(){
             this.dataset.m_invert = (invert + 1)%2;
             sortTable(j,invert);
             }, false);
-    }
-
-    
+	}
     var div = document.getElementById('divTable');
     div.appendChild(table);
     
 }
-
+makeTable();
 loadAjaxFiles();
 
 
