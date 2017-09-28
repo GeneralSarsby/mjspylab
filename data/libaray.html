@@ -208,7 +208,12 @@ loadedComments = {}
 function loadComments(){
 	loadedComments = JSON.parse(localStorage.getItem("comments")) || {};
 	readTextFile( 'comments.json', function(obj,name){ 
-        loadedComments = merge_objects(loadedComments,obj);
+            loadedComments = merge_objects(loadedComments,obj);
+            console.log('did merge');
+            console.log(obj);
+        },
+        function(obj,name){ 
+            console.log('failed to load comments');
         }
     );
 }
@@ -217,7 +222,7 @@ function saveCommentsLocal(){
 	localStorage.setItem('comments',JSON.stringify(loadedComments) );
 }
 function downloadComments(){
-	download_text(JSON.stringify(loadedComments),'comments.json','data:application/json;charset=utf-8,' );
+	download_text(JSON.stringify(loadedComments),'comments.json','data:application/json;charset=utf-8' );
 }
 
 window.onbeforeunload = function(){
@@ -227,7 +232,7 @@ window.onbeforeunload = function(){
 function download_text(text,filename,type){
 	console.log('downloading' + filename);
 	console.log(text);
-	var ftype = type || 'data:text/plain;charset=utf-8,';
+	var ftype = type || 'data:text/plain;charset=utf-8';
 	var pom = document.createElement('a');
 	pom.setAttribute('href', ftype+',' + encodeURIComponent(text));
 	pom.setAttribute('download', filename);
@@ -738,7 +743,7 @@ function makeTable(){
     
 }
 makeTable();
-loadAjaxFiles();
+setTimeout(loadAjaxFiles,100);
 
 
 </script>
