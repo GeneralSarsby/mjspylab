@@ -5,40 +5,49 @@
 <script src="renderjson.js"></script>
 <style>
 
-#container {
-    background: white;
-    display: block;
+body {
+	margin: 0;
+	color: rgb(19, 21, 22);
+	font: 10pt Georgia, Sans-serif;
 }
+
+/* File selector */
+#toppart {
+	text-align: right;
+	/*background: lightgrey;*/
+	padding: 0.5em;
+}
+
+
+/* Container */
+#container {background: white;}
 #left, #right {
     display: inline-block;
-	/*border: 1px solid black;*/
+    box-sizing: border-box;
 	vertical-align: top;
 	padding:0;
 	margin:0;
 	overflow:auto;
-	height:80vh;
+	height:100vh;
 }
 #left {
-    width: 49.5%;
+	float: left;
+    width: 50%;
     background: white;
     overflow:hidden;
 }
 #right {
+	float: right;
     background: white;
-	width: 49.5%;
-	border-bottom:1px solid black;
-	border-top:1px solid black;
+	width: 50%;
+	padding: 5px;
 }
+#right caption {font-size: 12pt;}
 
-#toppart {
-background: #lightgrey;
-margin:0.5em;
-padding:0;
-width:100%
-}
+/* Plot items*/
+#plotItems td {}
 
-span button {
-	
+span button {	
 	background: lightgrey;
 	border: 1px solid white;
 	margin-left: 0.1em;
@@ -62,6 +71,22 @@ span button:hover {
 	color:white;
 	background: grey;
 }
+table {font-size:small}
+tr {background: lightgrey}
+
+
+table {
+    /* border-collapse: collapse; */
+    width:100%;
+}
+
+
+table td.shrink {
+    white-space:nowrap
+}
+table td.expand {
+    width: 99%
+}
 
 </style>
 </head>
@@ -69,23 +94,63 @@ span button:hover {
 
 
 
-
-<div id="toppart">
-Data viewer. X:<span id='newxdata'></span>, Y:<span id='newydata'></span>
-<button onclick='plotdata()'> Plot </button>
-<button onclick='timeseriesdata()'> Timeseries </button>
-<button onclick='clearplot()'> Clear All </button>
-
-<select id="jsonSelecter" style='margin-left:6em'>
-</select> 
-<button onclick='loadDropdownMenu()'> Load </button>
-</div>
-
 <div id="container">
     <div id="left">
 		<canvas id="c" width="300" height="600"></canvas>
 	</div>
     <div id="right">
+        
+    	<div id="toppart">
+			Files: <select id="jsonSelecter"></select> <button onclick='loadDropdownMenu()'> Load </button>
+		</div>
+
+        <table>
+            <caption>Items Plotted:</caption>
+        <tbody id='ongraphitems'>
+        
+        </tbody>
+        </table>
+        <button onclick='clearplot()'> Clear All </button>
+        <table id="plotItems">
+          <!-- <tr>
+            <th> </th>
+            <th>Path</th>
+            <th></th>
+          </tr> -->
+          <tr>
+            <th>X</th>
+            <td class='expand'><span id='newxdata'></span></td>
+            <td> <button onclick="newplotbuild['x']=null;document.getElementById('newxdata').textContent=''">-</button> 
+            <button onclick="g.xlabel( newplotbuild['x'][newplotbuild['x'].length-1],true )">L</button>
+             </td>
+          </tr>
+          <tr>
+            <th>Y</th>
+            <td class='expand'><span id='newydata'></span></td>
+            <td>  <button onclick="newplotbuild['y']=null;document.getElementById('newydata').textContent=''">-</button>
+            <button onclick="g.ylabel( newplotbuild['y'][newplotbuild['y'].length-1],true )">L</button></td>
+          </tr>
+          <tr>
+            <th>Z</th>
+            <td class='expand'><span id='newzdata'></span></td>
+            <td>  <button onclick="newplotbuild['z']=null;document.getElementById('newzdata').textContent=''">-</button>  </td>
+          </tr>
+          <tr>
+            <th>Group(s)</th>
+            <td class='expand'><span id='newgroupdata'></span></td>
+            <td>  <button onclick="newplotbuild['groups']=[];document.getElementById('newgroupdata').textContent=''">-</button>  </td>
+          </tr>
+          <tr>
+            <th>Filter(s)</th>
+            <td class='expand'><span id='newfilterdata'></span></td>
+            <td> <button onclick="newplotbuild['filters']=[];document.getElementById('newfilterdata').textContent=''">-</button>  </td>
+          </tr>
+        </table> 
+        <p>
+            <button onclick='plotdata()'> Plot XY </button>
+            <button onclick='timeseriesdata()'> Plot timeseries </button> 
+            <button> Plot XYZ (not implemented) </button> 
+        </p>
 		<div id='jsonview'></div>
 	</div>
 </div>
@@ -97,75 +162,265 @@ g.matchParentSize();
 
 renderjson.set_show_to_level(1);
 
-newxdata = [];
-newydata = [];
-newxdatapath = [];
-newydatapath = [];
-newcaption = '';
+function getnewplotbuild(){
+    return {
+    'x':null,
+    'y':null,
+    'z':null,
+    'groups':[],
+    'filters':[],
+    'caption':'',
+    'type':'plot'
+    }
+}
+
+newplotbuild = getnewplotbuild();
 
 savedPlotPaths = [];
 
-function savePlotItemsKeypaths(pathX,pathY,type){
-	savedPlotPaths.push({'pathX':pathX,'pathY':pathY,type:type});
+function savePlotItemsKeypaths(build){
+    
+    var i = savedPlotPaths.length;
+	savedPlotPaths.push(build);
+    
+    var body = document.getElementById("ongraphitems");
+    var row = body.insertRow();
+    var cell = row.insertCell();
+    var s = document.createElement('span');
+	s.textContent =  build['x'][0]+ ' : ' + build['x'][ build['x'].length-1 ] + ' vs ' +  build['y'][ build['y'].length-1 ] +
+    (build['groups'].length?' Grouped':'') + 
+    (build['filters'].length?' Filtered':'')
+    ;
+    cell.classList.add('expand');
+    cell.appendChild(s);
+    
+    
+    var removeButton = document.createElement("button");
+	removeButton.innerHTML = "-";
+	removeButton.onclick = function(){ savedPlotPaths.splice(i, 1) ;redrawFromSavedKeypaths();  };
+    var cell = row.insertCell();
+    cell.appendChild(removeButton);
+    
+    var editbutton = document.createElement("button");
+	editbutton.innerHTML = "edit";
+	editbutton.onclick = function(){ savedPlotPaths.splice(i, 1); redrawFromSavedKeypaths(); 
+        clearbuildUI(); updatebuildUI(build); newplotbuild = build;
+          };
+    cell.appendChild(editbutton);
+    cell.classList.add('shrink');
 }
+
+function clearall(el){    while (el.lastChild) { el.removeChild(el.lastChild); } }
+function clearbuildUI(){
+    document.getElementById("newxdata").textContent ='';
+    document.getElementById("newydata").textContent ='';
+    document.getElementById("newzdata").textContent ='';
+    document.getElementById("newgroupdata").textContent ='';
+    document.getElementById("newfilterdata").textContent ='';
+}
+function updatebuildUI(build){
+    console.log(build);
+    build['x']?loadX(build['x']):false;
+    build['y']?loadY(build['y']):false;
+    build['z']?loadZ(build['z']):false;
+    build['groups'].length? build['groups'].map(e=>loadGroupBy(e)):false;
+    build['filters'].length? build['filters'].map(e=> loadFilter(e['path'],e['filter'])):false;
+    
+}
+
 function redrawFromSavedKeypaths(){
 	g.clear();
+    var body = document.getElementById("ongraphitems");
+    clearall(body);
 	savedPlotPathsCopy = savedPlotPaths;
 	savedPlotPaths = [];
 	for (var i=0;i<savedPlotPathsCopy.length;i++){
-		p = savedPlotPathsCopy[i];
-		loadX(loadObjectFromPath(p['pathX']),p['pathX'])
-		loadY(loadObjectFromPath(p['pathY']),p['pathY'])
-		if (p['type'] === 'timeseries'){
-			timeseriesdata();
-		} else {
-			plotdata();
-		}
+		newplotbuild = savedPlotPathsCopy[i];
+		_plotdata();
+		
 	}
-	
+	g.draw();
 }
 
-function loadX(obj,keypath){
-	newxdata = obj;
-	newxdatapath = keypath;
-	document.getElementById("newxdata").textContent = keypath.join('/');
+function loadX(keypath){
+	newplotbuild['x'] = keypath;
+	document.getElementById("newxdata").textContent = joinPath(keypath);
 }
 
-function loadY(obj,keypath){
-	newydata = obj;
-	newydatapath = keypath;
+function loadY(keypath){
+	newplotbuild['y'] = keypath;
+    newplotbuild['caption'] = keypath[0];
+	document.getElementById("newydata").textContent = joinPath(keypath);
+}
+
+function loadZ(keypath){
+	newplotbuild['z'] = keypath;
 	newcaption = keypath[keypath.length-1];
-	document.getElementById("newydata").textContent = keypath.join('/');
+	document.getElementById("newzdata").textContent = joinPath(keypath);
 }
+
+function loadGroupBy(keypath){
+	newplotbuild['groups'].push(keypath);
+	var el = document.getElementById("newgroupdata");
+    el.textContent = el.textContent + ' ' +  joinPath(keypath);
+}
+
+
+function loadFilter(keypath,filter){
+	newplotbuild['filters'].push({'path':keypath,'filter':filter});
+	var el = document.getElementById("newfilterdata");
+    el.textContent = el.textContent + ' ' +  joinPath(keypath) + '"' + filter + '"';
+}
+
+
 function basicDataChecks(){
 	return newxdata.length == newydata.length
 }
-function plotdata(){
+
+
+
+function _plotdata(){
 	if (basicDataChecks()){
-		g.plot(newxdata,newydata,newcaption);
-		savePlotItemsKeypaths(newxdatapath,newydatapath,'plot');
+        
+        var filter = [];
+        if (newplotbuild['filters'].length > 0){
+            
+            //evaluate all the filters
+            var filterparts = [];
+            for (var i =0;i< newplotbuild['filters'].length;i++){
+                filterparts[i] = parseFilterExpression(loadObjectFromPath(newplotbuild['filters'][i]['path']),newplotbuild['filters'][i]['filter']);
+                
+            }
+            // and the filters together
+            
+            for (var i=0;i<filterparts[0].length;i++){
+                filter[i] = true;
+                for (var j=0;j<filterparts.length;j++){
+                    filter[i] &= filterparts[j][i];
+                }
+            }
+            
+        } else {
+            filter = [true];
+        }
+        
+        
+        var grouparray = [];
+        if (newplotbuild['groups'].length > 0){
+            // are using groups
+            
+            var grouparrayparts  = [];
+            for (var i =0;i< newplotbuild['groups'].length;i++){
+                grouparrayparts.push( loadObjectFromPath(newplotbuild['groups'][i]) ) ;
+            }
+            
+            
+            for (var j =0;j< grouparrayparts[0].length;j++){
+                var s = '';
+                for (var i =0;i< newplotbuild['groups'].length;i++){
+                    s += ' ' + grouparrayparts[i][j];
+                }
+                grouparray.push(s);
+            }
+            
+        }  else {
+            grouparray = [newplotbuild['caption']];
+        }
+        console.log(grouparray);
+        console.log(filter);
+        //use the grouparray and filter to make series
+        
+        
+        var series = {};
+        
+        
+        var newx = loadObjectFromPath(newplotbuild['x']);
+        var newy = loadObjectFromPath(newplotbuild['y']);
+        
+        
+        for (i =0;i<newx.length;i++){
+            
+            if (filter[i%filter.length]){
+                
+                var gkey = grouparray[i%grouparray.length] ;
+                
+                if (! series.hasOwnProperty(gkey)){
+                    series[gkey] = {};
+                    series[gkey]['x'] = [];
+                    series[gkey]['y'] = [];
+                }
+                series[gkey]['x'].push(newx[i])
+                series[gkey]['y'].push(newy[i])
+            }
+            
+        }
+        console.log(series);
+        
+        for (var key in series) {
+            if (series.hasOwnProperty(key)) {
+                
+                if (newplotbuild['type'] === 'plot'){
+                    g.plot(series[key]['x'],series[key]['y'],key);
+                } else if (newplotbuild['type'] === 'datetime'){
+                    g.timeseries(series[key]['x'],series[key]['y'],key);
+                } 
+                
+            }
+        }  
+		savePlotItemsKeypaths(newplotbuild);
+        newplotbuild = getnewplotbuild();
+        clearbuildUI();
 		g.draw();
-		loadX([],[]);
-		loadY([],[]);
 	}
 }
 
-function timeseriesdata(){
-	if (basicDataChecks()){
-		g.timeseries(newxdata,newydata,newcaption);
-		savePlotItemsKeypaths(newxdatapath,newydatapath,'timeseries');
-		g.draw();
-		loadX([],[]);
-		loadY([],[]);
-	}
+function plotdata(){
+    newplotbuild['type'] = 'plot';
+    _plotdata();
 }
+
+function timeseriesdata(){
+    newplotbuild['type'] = 'datetime';
+    _plotdata();
+}
+
 function clearplot(){
+    var body = document.getElementById("ongraphitems");
+    clearall(body);
 	g.clear();g.draw();
 	savedPlotPaths = []; 
 }
 
 
 
+function parseFilterExpression(array,text){
+	//move some functions around from the math namespace to local so
+	//they can be used inside eval.
+	//ax and ay are arrays
+	var sin = Math.sin;
+	var cos = Math.cos;
+	var tan = Math.tan;
+	var ln = Math.log;
+	var pi = Math.PI;
+	var e = Math.E;
+	var pow = Math.pow;
+	var sqrt = Math.sqrt;
+	var log = function(x){
+		return Math.log(x)/Math.log(10);
+	}
+	var now = (new Date()).getTime();
+	var returny = [];
+	var wrapper = "for (var i = 0;i<array.length;i++){"+
+        "el = array[i];" +
+		"returny.push( "+  text + ");}";
+	try{
+		eval(wrapper);
+	}catch(e){
+		console.log('Evaluation of ' + text + ' failed');
+	}
+	return returny;
+	
+}
 
 function readTextFile(file,callback){
     var rawFile = new XMLHttpRequest();
@@ -196,7 +451,10 @@ LoadedJson = {};
 function reloadFile(name){
 	//this must already exist in LoadedJson and JsonFilesForReload
 	//removeJson(name);
-	readTextFile( name, function (obj,name){  setLoadedJson(obj,name,true); redrawFromSavedKeypaths();   } )
+	readTextFile( name, function (obj,name){
+        setLoadedJson(obj,name,true); 
+        redrawFromSavedKeypaths();
+    } )
 
 	
 }
@@ -225,13 +483,10 @@ function loadAjaxFiles(){
 	}
 	
 	
-	if (s.length == 0){
+	
 		//if there is a manifest file, load it in.
 		readTextFile( 'data_manifest.json', function(obj,name){ 
 		
-			//load in the first option
-			readTextFile(  obj[obj.length-1]['filename']  , function (obj,name){  setLoadedJson(obj,name,true);   } )     
-			
 			var select = document.getElementById("jsonSelecter"); 
 			
 
@@ -245,8 +500,8 @@ function loadAjaxFiles(){
 		} );
 
 		
-		
-		
+	if (s.length == 0){
+		readTextFile(  obj[obj.length-1]['filename']  , function (obj,name){  setLoadedJson(obj,name,true);   } )  
 	}
 }
 
