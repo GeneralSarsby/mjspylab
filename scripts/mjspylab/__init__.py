@@ -1,6 +1,6 @@
 """                        Generic data acquisition code.
                                ===  Library CODE  ===
-      Author: MJS             Date: 2017-06-29                 Version: 0_0_5
+      Author: MJS             Date: 2017-06-29                 Version: 0_0_6
 
 This is written on top of the qtlab code and could not be done without it.
 Much of the hard work has already been done, this just provides a nice
@@ -47,12 +47,17 @@ def readAuxrillaryLine(file):
         last_line = f.read().splitlines()[-1]
     return last_line
     
-
+def _save_nan_inf(n):
+    if isinstance(n, float):
+        if math.isnan(n) or (n == np.inf) or (n == -np.inf):
+            print('Warning: discarding bad float ' + str(n))
+            return None
+    return n
 
 def _addOrBuild(l,i,e):
     if i >= len(l):
         l.extend(  [0]*  (i+1-len(l))    )
-    l[i]=e
+    l[i]=_save_nan_inf(e)
     
     
 def _addToDictList(di,items,i,maxl):
@@ -130,24 +135,24 @@ def aquireData(devices=None,
     
     _saveToManifest(measurement,data_folder)
     
+    # this was the old way, but it returned a cashed copy after being run only once. :( boo.
+    # however the inspect.getsourcefile does give the correct file. 
+    #self_script = inspect.getsource(sys.modules['__main__'])
     
+    script_file = inspect.getsourcefile(sys.modules['__main__'])
+    print('Being called from script: ' + script_file)
+    with open(script_file,'r') as f:
+        self_script = f.read()
     
     print(header)
     for n in attributes:
         print( n.rjust(14),':', attributes[n])
     
-    
-    start_time = time.time()
-    mid_time = time.time()
-    
     data = {}
     measurement['data'] = data
     
-    
-    
     coords = [e['range'] for e in coordinatesArray]# [c['range'] for c in coordinates]
     coordnames =  [e['name'] for e in coordinatesArray]#[c['name'] for c in coordinates]
-    
     
     length=1
     for i in coords:
@@ -162,45 +167,36 @@ def aquireData(devices=None,
     print('Getting starting device parameters')
     attributes['_devices start'] = _getAllDeviceSettings(devices)
     
+    
+    print('Saving to file:', file_path)
     print('Starting Aquisition')
     
     update_delay = 5 #every 5 seconds ish or one loop. 
-    update_last = time.time()
     has_opened_graph = False
     attributes['_completed'] = False
     attributes['_in progress'] = True
     lastresultsdict = None
     user_storage = {}
+    
+    start_time = time.time()
+    mid_time = time.time()
+    update_last = time.time()
     try:
         for c in itertools.product(*coords):
-        
-            
             corddict = dict(zip(coordnames, c))
-            
-            
             if lastcorddict is 'Not Set Up':
                 lastcorddict =  { k: float('nan') for k in corddict} # make a nan dict. 
-            
-            
             resultsdict = {}
             CONTINUE = acqFunction(corddict,resultsdict,lastcorddict,lastresultsdict,user_storage)
             if CONTINUE is False:
                 break # we have been told to stop. so stop.
-                
-            
             lastresultsdict = resultsdict
             lastcorddict = corddict
-            
             mid_time = time.time()
-            
-            #add coords to data
             _addToDictList(data, corddict ,i,length)
             _addToDictList(data, resultsdict ,i,length)
             _addToDictList(data, {'_time': round(mid_time-start_time,3)  } ,i,length)
             _equalLenghtTable(data,i)
-            
-            
-            
             i+=1
             if mid_time - update_last > update_delay or i == length:
                 update_last= mid_time
@@ -208,15 +204,12 @@ def aquireData(devices=None,
                 end_time = datetime.datetime.now() + remaining_time
                 if (show_live_plot) and (file_name is not None):
                     if not has_opened_graph:
-                        webfile_name = 'file:///'+data_folder.replace('\\','/')+'viewer.html'
                         print('Showing graph:',webfile_name)
-                        print('Saving to file:', file_path)
+                        webfile_name = 'file:///'+data_folder.replace('\\','/')+'viewer.html'
                         webbrowser.open(webfile_name)
                         has_opened_graph = True
-                #updatestring = str(corddict)# + ' ' + str(resultsdict)
                 print( '  '+str(math.floor(float(i)/length*100))+'%','  Time remaining: ' , str(remaining_time), ' eta: ', str(end_time)[:19], end='\r')
                 attributes['_completion'] = math.floor( float(i) / length * 100)
-                #save all as we go along.
                 _saveMeasurement(measurement,file_path,fast=True)
                 if save_backwards_compatable_files:
                     _saveBackwardsCompatableFiles(file_path,measurement)
@@ -225,15 +218,16 @@ def aquireData(devices=None,
         print('Stopping Aquisition Early')
     else:
         attributes['_completed'] = True # say we are done!
+        print( '  100%','  Time remaining:  0:00:00.000000', ' eta: ', str(datetime.datetime.now())[:19] )
     finally:
         attributes['_in progress'] = False
     
-    #_equalLenghtTable(data,i)
-    
-    print( '  100%','  Time remaining:  0:00:00.000000', ' eta: ', str(datetime.datetime.now())[:19] )
     print('Done Aquisition')
+    
     attributes['_completion'] = math.ceil( float(i) / length * 100)
+    
     total_time = datetime.timedelta( seconds = (mid_time - start_time) )
+    
     print('Total Aquisition Time ', str(total_time))
     
     print('Running End Function')
@@ -244,10 +238,8 @@ def aquireData(devices=None,
     
     attributes['_time end'] = _iso_datetime_string()
     
-    self_script = inspect.getsource(sys.modules['__main__'])
     attributes['_aquisition script'] = self_script
-    
-    
+    attributes['_aquisition script file'] = script_file
     
     if save_self_script:
         with open(file_path+'.py', 'w') as f:
@@ -257,7 +249,6 @@ def aquireData(devices=None,
     _saveMeasurement(measurement,file_path)
     if save_backwards_compatable_files:
         _saveBackwardsCompatableFiles(file_path,measurement)
-                    
                     
     if shared_folder:
         try:
@@ -275,9 +266,9 @@ def aquireData(devices=None,
     
 def _saveMeasurement(measurement,file_path,fast=False):
     if fast:
-        json.dump(measurement, codecs.open(file_path, 'w', encoding='utf-8'), separators=(',', ':'), sort_keys=True)
+        json.dump(measurement, codecs.open(file_path, 'w', encoding='utf-8'), separators=(',', ':'), sort_keys=True, allow_nan=False)
     else:
-        json.dump(measurement, codecs.open(file_path, 'w', encoding='utf-8'), separators=(',', ':'), sort_keys=True, indent=2)
+        json.dump(measurement, codecs.open(file_path, 'w', encoding='utf-8'), separators=(',', ':'), sort_keys=True, indent=2, allow_nan=False)
 
     
 def _build_empty_manifest(manifest_file):
